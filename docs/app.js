@@ -201,7 +201,7 @@ function renderTable(hunts, hunterType, numYears) {
     '<td>' + (i + 1) + '</td>' +
     '<td class="mono">' + h.hunt_code + '</td>' +
     '<td>' + titleCase(h.species) + '</td>' +
-    '<td>' + escHtml(h.unit_desc) + '</td>' +
+    '<td><span class="unit-desc" title="' + escAttr(h.unit_desc) + '">' + escHtml(h.unit_desc) + '</span></td>' +
     '<td>' + escHtml(h.bag) + '</td>' +
     '<td>' + fmtVal(h.type_licenses) + '</td>' +
     '<td>' + fmtVal(h.latest_applicants) + '</td>' +
@@ -214,10 +214,25 @@ function renderTable(hunts, hunterType, numYears) {
     '<td class="odds ' + oddsClass(h.avg_odds) + '">' + fmtOdds(h.avg_odds) + '</td>' +
     '</tr>'
   ).join('');
+
+  updatePinnedWidth();
 }
 
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escAttr(s) {
+  return escHtml(s).replace(/"/g, '&quot;');
+}
+
+function updatePinnedWidth() {
+  const firstTh = document.querySelector('#results-table thead th:nth-child(1)');
+  if (firstTh) {
+    document.querySelector('#results-table').style.setProperty(
+      '--col1-w', firstTh.offsetWidth + 'px'
+    );
+  }
 }
 
 // ---- CSV export ----

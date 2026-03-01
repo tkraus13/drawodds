@@ -240,9 +240,56 @@ main {
 
 #results-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.82rem;
   white-space: nowrap;
+}
+
+/* Pinned columns: # and Hunt Code */
+#results-table th:nth-child(1),
+#results-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: inherit;
+}
+
+#results-table th:nth-child(2),
+#results-table td:nth-child(2) {
+  position: sticky;
+  left: var(--col1-w, 2rem);
+  z-index: 2;
+  background: inherit;
+}
+
+#results-table thead th:nth-child(1),
+#results-table thead th:nth-child(2) {
+  z-index: 3;
+  background: var(--header-bg);
+}
+
+/* Shadow hint on pinned columns when scrolled */
+#results-table td:nth-child(2)::after,
+#results-table th:nth-child(2)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 6px;
+  background: linear-gradient(to right, rgba(0,0,0,0.06), transparent);
+  pointer-events: none;
+}
+
+/* Unit description truncation */
+.unit-desc {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 #results-table thead th {
@@ -264,6 +311,7 @@ main {
   border-bottom: 1px solid #e8e5de;
 }
 
+#results-table tbody tr { background: var(--bg); }
 #results-table tbody tr:nth-child(even) { background: var(--stripe); }
 #results-table tbody tr:hover { background: var(--accent-light); }
 
@@ -312,4 +360,5 @@ footer p { margin: 0.25rem 0; }
   #results-table { font-size: 0.75rem; }
   #results-table thead th,
   #results-table tbody td { padding: 0.35rem 0.4rem; }
+  .unit-desc { max-width: 140px; }
 }
