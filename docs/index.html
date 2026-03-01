@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NM Big Game Draw Odds</title>
+  <meta name="description" content="New Mexico Big Game Drawing Odds analyzer (2022-2025). Filter by species, unit, hunter type. Unofficial tool using NMDGF data.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>NM Big Game Draw Odds</h1>
+    <p class="subtitle">NMDGF Drawing Odds 2022&ndash;2025 &middot; Unofficial analysis tool</p>
+  </header>
+
+  <main>
+    <section id="controls">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="species-select">Species</label>
+          <div class="multi-select" id="species-ms">
+            <button type="button" class="ms-toggle" id="species-toggle">All Species</button>
+            <div class="ms-dropdown" id="species-dropdown"></div>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Year(s)</label>
+          <div class="year-toggles" id="year-toggles"></div>
+        </div>
+
+        <div class="filter-group">
+          <label for="hunter-type-select">Hunter Type</label>
+          <select id="hunter-type-select">
+            <option value="resident" selected>Resident</option>
+            <option value="nonresident">Nonresident</option>
+            <option value="outfitter">Outfitter</option>
+            <option value="total">All (Total)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="unit-input">Unit / GMU</label>
+          <input id="unit-input" type="text" placeholder="e.g. 34 or 16,17">
+        </div>
+
+        <div class="filter-group">
+          <label for="sort-select">Sort By</label>
+          <select id="sort-select">
+            <option value="latest_odds">Latest 1st Choice Odds</option>
+            <option value="avg_odds">Avg 1st Choice Odds</option>
+            <option value="licenses">Licenses</option>
+            <option value="unit">Unit</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="top-select">Show</label>
+          <select id="top-select">
+            <option value="25" selected>Top 25</option>
+            <option value="50">Top 50</option>
+            <option value="100">Top 100</option>
+            <option value="0">All</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button id="export-csv-btn" type="button">Export CSV</button>
+        <span id="result-count"></span>
+      </div>
+    </section>
+
+    <section id="results">
+      <div class="table-wrapper">
+        <table id="results-table">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Data source: NMDGF Drawing Odds Complete Reports. Not affiliated with NMDGF.</p>
+    <p>Draw odds only &mdash; does not include harvest success rates.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
