@@ -94,9 +94,22 @@ function filterBag(records, bags) {
   );
 }
 
-function filterYouth(records, include) {
+function isRestricted(unitDesc) {
+  const dl = unitDesc.toLowerCase();
+  return (
+    dl.includes('youth')
+    || dl.includes('mobility')
+    || dl.includes('impair')
+    || dl.includes('wsmr') || dl.includes('white sands') || dl.includes('missile')
+    || dl.includes('private land')
+    || dl.includes('military only')
+    || dl.includes('veteran only')
+  );
+}
+
+function filterRestricted(records, include) {
   if (include) return records;
-  return records.filter(r => !r.unit_desc.toLowerCase().includes('youth'));
+  return records.filter(r => !isRestricted(r.unit_desc));
 }
 
 // ---- Odds calculation (port of HuntRecord.draw_odds) ----
@@ -509,7 +522,7 @@ function stateToHash() {
   if (sort !== 'latest_odds') params.set('sort', sort);
   const top = document.getElementById('top-select').value;
   if (top !== '25') params.set('n', top);
-  if (document.getElementById('include-youth').checked) params.set('youth', '1');
+  if (document.getElementById('include-restricted').checked) params.set('restricted', '1');
   const str = params.toString();
   history.replaceState(null, '', str ? '#' + str : location.pathname);
 }
@@ -539,7 +552,7 @@ function hashToState() {
   if (params.has('u')) document.getElementById('unit-input').value = params.get('u');
   if (params.has('sort')) document.getElementById('sort-select').value = params.get('sort');
   if (params.has('n')) document.getElementById('top-select').value = params.get('n');
-  if (params.has('youth')) document.getElementById('include-youth').checked = true;
+  if (params.has('restricted')) document.getElementById('include-restricted').checked = true;
 }
 
 // ---- Main filter pipeline ----
@@ -547,9 +560,9 @@ function hashToState() {
 function applyFilters() {
   let records = RAW_RECORDS;
 
-  // Youth filter (applied first, globally)
-  const includeYouth = document.getElementById('include-youth').checked;
-  records = filterYouth(records, includeYouth);
+  // Restricted hunt filter (applied first, globally)
+  const includeRestricted = document.getElementById('include-restricted').checked;
+  records = filterRestricted(records, includeRestricted);
 
   // Year filter
   const selectedYears = getSelectedYears();
@@ -637,7 +650,7 @@ function bindEvents() {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
 
-  document.getElementById('include-youth').addEventListener('change', applyFilters);
+  document.getElementById('include-restricted').addEventListener('change', applyFilters);
 
   let unitTimer;
   document.getElementById('unit-input').addEventListener('input', () => {

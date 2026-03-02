@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NM Big Game Draw Odds</title>
   <meta name="description" content="New Mexico Big Game Drawing Odds analyzer (2022-2025). Filter by species, unit, hunter type. Unofficial tool using NMDGF data.">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header>
@@ -73,7 +73,7 @@
       </div>
 
       <div class="action-row">
-        <label class="youth-toggle"><input type="checkbox" id="include-youth"> Include youth hunts</label>
+        <label class="youth-toggle"><input type="checkbox" id="include-restricted"> Include restricted hunts (youth, mobility impaired, WSMR, private land, military)</label>
         <button id="export-csv-btn" type="button">Export CSV</button>
         <span id="result-count"></span>
       </div>
@@ -96,6 +96,6 @@
     <p>Draw odds only &mdash; does not include harvest success rates.</p>
   </footer>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

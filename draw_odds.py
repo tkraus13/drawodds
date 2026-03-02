@@ -667,11 +667,29 @@ def filter_bag(records: List[HuntRecord], bags: List[str]) -> List[HuntRecord]:
             if r.bag in bag_set or bag_set & set(r.bag.split("/"))]
 
 
-def filter_youth(records: List[HuntRecord], include: bool) -> List[HuntRecord]:
-    """Exclude youth-only hunts unless include is True."""
+def is_restricted(unit_desc: str) -> bool:
+    """Check if a hunt has access restrictions that limit the applicant pool."""
+    dl = unit_desc.lower()
+    return (
+        "youth" in dl
+        or "mobility" in dl
+        or "impair" in dl
+        or ("wsmr" in dl or "white sands" in dl or "missile" in dl)
+        or "private land" in dl
+        or "military only" in dl
+        or "veteran only" in dl
+    )
+
+
+def filter_restricted(records: List[HuntRecord], include: bool) -> List[HuntRecord]:
+    """Exclude restricted-access hunts unless include is True.
+
+    Restricted hunts: youth-only, mobility impaired, WSMR / White Sands,
+    private-land-only, military-only, and veteran-only.
+    """
     if include:
         return records
-    return [r for r in records if "youth" not in r.unit_desc.lower()]
+    return [r for r in records if not is_restricted(r.unit_desc)]
 
 
 def display_strategy(
@@ -805,9 +823,9 @@ def main() -> None:
         help='Hunt type to optimize draws for. E.g.: "bull elk", "fork antlered deer"',
     )
     parser.add_argument(
-        "--include-youth",
+        "--include-restricted",
         action="store_true",
-        help="Include youth-only hunts (excluded by default)",
+        help="Include restricted hunts: youth, mobility impaired, WSMR, private land, military (excluded by default)",
     )
     parser.add_argument(
         "--list-species",
@@ -854,10 +872,10 @@ def main() -> None:
     available_years = sorted({r.year for r in records})
     print(f"  Years: {available_years} | Total hunt records: {len(records)}", file=sys.stderr)
 
-    # Youth filter (applied before all other filters)
-    records = filter_youth(records, args.include_youth)
-    if not args.include_youth:
-        print(f"  Excluding youth-only hunts: {len(records)} remaining", file=sys.stderr)
+    # Restricted hunt filter (applied before all other filters)
+    records = filter_restricted(records, args.include_restricted)
+    if not args.include_restricted:
+        print(f"  Excluding restricted hunts: {len(records)} remaining", file=sys.stderr)
 
     # --list-species shortcut
     if args.list_species:
