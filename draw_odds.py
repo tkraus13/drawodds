@@ -146,6 +146,46 @@ SPECIES_NORMALIZE = {
 }
 
 _HUNT_CODE_RE = re.compile(r'^[A-Z]{2,6}-\d+-\d+$')
+
+# ─── Hunt type mapping (user-friendly name → species + bag codes) ─────────────
+# Used by --strategy to let users say "bull elk" instead of --species elk + manual
+# bag filtering.  Keys are lowercase.  Values are (SPECIES, [bag_codes]).
+HUNT_TYPES = {
+    # Elk
+    "bull elk":             ("ELK", ["MB"]),
+    "mature bull elk":      ("ELK", ["MB"]),
+    "any elk":              ("ELK", ["A"]),
+    "either sex elk":       ("ELK", ["ES"]),
+    "cow elk":              ("ELK", ["ES"]),
+    "antlerless elk":       ("ELK", ["APRE/6", "APRE/6/A"]),
+    # Deer
+    "fork antlered deer":           ("DEER", ["FAD"]),
+    "fork antlered mule deer":      ("DEER", ["FAMD"]),
+    "fork antlered whitetail deer": ("DEER", ["FAWTD"]),
+    "either sex whitetail deer":    ("DEER", ["ESWTD"]),
+    "any deer":                     ("DEER", ["A"]),
+    "mule deer":                    ("DEER", ["FAD", "FAMD"]),
+    "whitetail deer":               ("DEER", ["FAWTD", "ESWTD"]),
+    # Pronghorn
+    "buck pronghorn":           ("PRONGHORN", ["MB"]),
+    "mature buck pronghorn":    ("PRONGHORN", ["MB"]),
+    "either sex pronghorn":     ("PRONGHORN", ["ES"]),
+    "doe pronghorn":            ("PRONGHORN", ["F-IM"]),
+    # Barbary sheep
+    "barbary sheep":            ("BARBARY SHEEP", ["ES", "F-IM"]),
+    "barbary ram":              ("BARBARY SHEEP", ["ES"]),
+    "barbary ewe":              ("BARBARY SHEEP", ["F-IM"]),
+    # Bighorn sheep
+    "bighorn ram":              ("BIGHORN SHEEP", ["RAM"]),
+    "bighorn ewe":              ("BIGHORN SHEEP", ["EWE"]),
+    "bighorn sheep":            ("BIGHORN SHEEP", ["RAM", "EWE"]),
+    # Ibex
+    "ibex":                     ("IBEX", ["ES", "F-IM"]),
+    # Javelina
+    "javelina":                 ("JAVELINA", ["ES"]),
+    # Oryx
+    "oryx":                     ("ORYX", ["ES", "BHO"]),
+}
 _SKIP_LABELS = frozenset({
     "Hunt", "Hunt Code", "SPECIES HUNT INFORMATION", "SPECIES",
     "Pre-Draw Applicants", "Post-Draw Successful Applicants",
@@ -600,6 +640,122 @@ def list_species(records: List[HuntRecord]) -> None:
         print(f"  {sp.title():<30} (years: {', '.join(str(y) for y in yrs)})")
 
 
+def list_hunt_types() -> None:
+    """Print all valid --strategy hunt type names."""
+    print("\nAvailable hunt types for --strategy:")
+    by_species: Dict[str, List[str]] = defaultdict(list)
+    for name, (species, bags) in HUNT_TYPES.items():
+        by_species[species].append(f"  {name:<35} (bag: {', '.join(bags)})")
+    for species in sorted(by_species):
+        print(f"\n  {species}")
+        print(f"  {'─' * 50}")
+        for line in sorted(by_species[species]):
+            print(line)
+    print("\nUsage: python draw_odds.py --strategy \"bull elk\"")
+    print("       python draw_odds.py --strategy \"fork antlered deer\" --unit 34")
+
+
+def filter_bag(records: List[HuntRecord], bags: List[str]) -> List[HuntRecord]:
+    """Keep records whose bag code matches any of the given bags.
+
+    Matches via exact equality OR component overlap when splitting on '/'.
+    This handles: exact 'APRE/6' match, plus combo codes like MB/A matching
+    either 'MB' or 'A' as individual components.
+    """
+    bag_set = set(bags)
+    return [r for r in records
+            if r.bag in bag_set or bag_set & set(r.bag.split("/"))]
+
+
+def filter_youth(records: List[HuntRecord], include: bool) -> List[HuntRecord]:
+    """Exclude youth-only hunts unless include is True."""
+    if include:
+        return records
+    return [r for r in records if "youth" not in r.unit_desc.lower()]
+
+
+def display_strategy(
+    records: List[HuntRecord],
+    hunt_type_name: str,
+    species: str,
+    bags: List[str],
+    hunter_type: str,
+    top: int,
+) -> None:
+    """Show the top N hunts per choice tier to maximize draw odds."""
+    # Get the latest year for each hunt code
+    latest: Dict[str, HuntRecord] = {}
+    for r in records:
+        if r.hunt_code not in latest or r.year > latest[r.hunt_code].year:
+            latest[r.hunt_code] = r
+
+    recs = list(latest.values())
+    if not recs:
+        print("No matching hunts found for that strategy.")
+        return
+
+    year = max(r.year for r in recs)
+    bag_label = ", ".join(bags)
+    type_label = hunter_type.title()
+
+    print(f"\n{'═' * 70}")
+    print(f"  DRAW STRATEGY: {hunt_type_name.title()}")
+    print(f"  {species.title()} (bag: {bag_label}) | {type_label} | {year}")
+    print(f"{'═' * 70}")
+
+    for choice, choice_label in [(1, "1st"), (2, "2nd"), (3, "3rd")]:
+        # Build (hunt_code, odds, record) tuples
+        ranked = []
+        for r in recs:
+            odds = r.draw_odds(hunter_type, choice)
+            if odds is not None and odds > 0:
+                if hunter_type == "resident":
+                    apps = [r.res_1st, r.res_2nd, r.res_3rd][choice - 1]
+                elif hunter_type == "nonresident":
+                    apps = [r.nr_1st, r.nr_2nd, r.nr_3rd][choice - 1]
+                elif hunter_type == "outfitter":
+                    apps = [r.out_1st, r.out_2nd, r.out_3rd][choice - 1]
+                else:
+                    apps = [r.total_1st, r.total_2nd, r.total_3rd][choice - 1]
+                ranked.append((odds, apps, r))
+
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        shown = ranked[:top]
+
+        print(f"\n  ── Best {choice_label} Choice Options ──")
+
+        if not shown:
+            print("  No hunts with draws in this tier.")
+            continue
+
+        headers = ["#", "Hunt Code", "Unit / Description", "Bag", "Licenses", "Apps", "Draw %"]
+        rows = []
+        for i, (odds, apps, r) in enumerate(shown, 1):
+            rows.append([
+                i,
+                r.hunt_code,
+                r.unit_desc[:38],
+                r.bag,
+                r.licenses,
+                apps,
+                f"{odds:.1f}%",
+            ])
+
+        if HAS_TABULATE:
+            print(tabulate(rows, headers=headers, tablefmt="rounded_outline"))
+        else:
+            col_w = [max(len(str(r[j])) for r in [headers] + rows) for j in range(len(headers))]
+            fmt = "  ".join(f"{{:<{w}}}" for w in col_w)
+            print(f"  {fmt.format(*headers)}")
+            print(f"  {'─' * (sum(col_w) + 2 * (len(headers) - 1))}")
+            for row in rows:
+                print(f"  {fmt.format(*[str(x) for x in row])}")
+
+    print(f"\n  Tip: Combine with --unit to narrow by GMU (e.g. --unit 34)")
+    print(f"       Use --year all to see multi-year trends")
+    print()
+
+
 # ─── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -645,9 +801,23 @@ def main() -> None:
         help="Output CSV to stdout instead of a table",
     )
     parser.add_argument(
+        "--strategy",
+        help='Hunt type to optimize draws for. E.g.: "bull elk", "fork antlered deer"',
+    )
+    parser.add_argument(
+        "--include-youth",
+        action="store_true",
+        help="Include youth-only hunts (excluded by default)",
+    )
+    parser.add_argument(
         "--list-species",
         action="store_true",
         help="List all species found in the reports and exit",
+    )
+    parser.add_argument(
+        "--list-types",
+        action="store_true",
+        help="List all valid --strategy hunt type names and exit",
     )
     parser.add_argument(
         "--data-dir",
@@ -658,8 +828,13 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if not args.list_species and not args.species and not args.unit:
-        parser.error("Provide at least --species or --unit (or --list-species to explore)")
+    # --list-types needs no data
+    if args.list_types:
+        list_hunt_types()
+        return
+
+    if not args.list_species and not args.species and not args.unit and not args.strategy:
+        parser.error("Provide --species, --unit, --strategy, or --list-species / --list-types")
 
     # Parse year filter
     year_filter: Optional[List[int]] = None
@@ -679,9 +854,38 @@ def main() -> None:
     available_years = sorted({r.year for r in records})
     print(f"  Years: {available_years} | Total hunt records: {len(records)}", file=sys.stderr)
 
+    # Youth filter (applied before all other filters)
+    records = filter_youth(records, args.include_youth)
+    if not args.include_youth:
+        print(f"  Excluding youth-only hunts: {len(records)} remaining", file=sys.stderr)
+
     # --list-species shortcut
     if args.list_species:
         list_species(records)
+        return
+
+    # --strategy mode
+    if args.strategy:
+        key = args.strategy.strip().lower()
+        if key not in HUNT_TYPES:
+            print(f"ERROR: Unknown hunt type: {args.strategy!r}", file=sys.stderr)
+            print("  Use --list-types to see valid options.", file=sys.stderr)
+            sys.exit(1)
+        strategy_species, strategy_bags = HUNT_TYPES[key]
+        records = filter_species(records, [strategy_species])
+        records = filter_bag(records, strategy_bags)
+        print(f"  Strategy: {args.strategy} → {strategy_species}, bag={strategy_bags}", file=sys.stderr)
+        if args.unit:
+            unit_list = [u.strip() for u in args.unit.split(",") if u.strip()]
+            records = filter_units(records, unit_list)
+            print(f"  After --unit ({', '.join(unit_list)}): {len(records)} records", file=sys.stderr)
+        if not records:
+            print("\nNo hunts match that strategy + filters.", file=sys.stderr)
+            sys.exit(0)
+        print(f"  Matching hunt records: {len(records)}\n", file=sys.stderr)
+        strategy_top = args.top if args.top != 25 else 3
+        display_strategy(records, args.strategy, strategy_species, strategy_bags,
+                         args.hunter_type, strategy_top)
         return
 
     # Apply filters
