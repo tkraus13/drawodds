@@ -17,6 +17,13 @@
     <section id="controls">
       <div class="filter-row">
         <div class="filter-group">
+          <label for="strategy-select">Draw Strategy</label>
+          <select id="strategy-select">
+            <option value="">— Browse All —</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <label for="species-select">Species</label>
           <div class="multi-select" id="species-ms">
             <button type="button" class="ms-toggle" id="species-toggle">All Species</button>
@@ -44,7 +51,7 @@
           <input id="unit-input" type="text" placeholder="e.g. 34 or 16,17">
         </div>
 
-        <div class="filter-group">
+        <div class="filter-group" id="sort-group">
           <label for="sort-select">Sort By</label>
           <select id="sort-select">
             <option value="latest_odds">Latest 1st Choice Odds</option>
@@ -54,7 +61,7 @@
           </select>
         </div>
 
-        <div class="filter-group">
+        <div class="filter-group" id="top-group">
           <label for="top-select">Show</label>
           <select id="top-select">
             <option value="25" selected>Top 25</option>
@@ -66,6 +73,7 @@
       </div>
 
       <div class="action-row">
+        <label class="youth-toggle"><input type="checkbox" id="include-youth"> Include youth hunts</label>
         <button id="export-csv-btn" type="button">Export CSV</button>
         <span id="result-count"></span>
       </div>
@@ -79,6 +87,8 @@
         </table>
       </div>
     </section>
+
+    <section id="strategy-results" style="display:none;"></section>
   </main>
 
   <footer>

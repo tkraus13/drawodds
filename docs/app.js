@@ -41,6 +41,37 @@ async function loadData() {
   YEARS_LIST = [...new Set(RAW_RECORDS.map(r => r.year))].sort((a, b) => a - b);
 }
 
+// ---- Hunt type mapping (mirrors HUNT_TYPES in draw_odds.py) ----
+
+const HUNT_TYPES = {
+  'bull elk':             { species: 'ELK', bags: ['MB'] },
+  'mature bull elk':      { species: 'ELK', bags: ['MB'] },
+  'any elk':              { species: 'ELK', bags: ['A'] },
+  'either sex elk':       { species: 'ELK', bags: ['ES'] },
+  'cow elk':              { species: 'ELK', bags: ['ES'] },
+  'antlerless elk':       { species: 'ELK', bags: ['APRE/6', 'APRE/6/A'] },
+  'fork antlered deer':           { species: 'DEER', bags: ['FAD'] },
+  'fork antlered mule deer':      { species: 'DEER', bags: ['FAMD'] },
+  'fork antlered whitetail deer': { species: 'DEER', bags: ['FAWTD'] },
+  'either sex whitetail deer':    { species: 'DEER', bags: ['ESWTD'] },
+  'any deer':                     { species: 'DEER', bags: ['A'] },
+  'mule deer':                    { species: 'DEER', bags: ['FAD', 'FAMD'] },
+  'whitetail deer':               { species: 'DEER', bags: ['FAWTD', 'ESWTD'] },
+  'buck pronghorn':           { species: 'PRONGHORN', bags: ['MB'] },
+  'mature buck pronghorn':    { species: 'PRONGHORN', bags: ['MB'] },
+  'either sex pronghorn':     { species: 'PRONGHORN', bags: ['ES'] },
+  'doe pronghorn':            { species: 'PRONGHORN', bags: ['F-IM'] },
+  'barbary sheep':            { species: 'BARBARY SHEEP', bags: ['ES', 'F-IM'] },
+  'barbary ram':              { species: 'BARBARY SHEEP', bags: ['ES'] },
+  'barbary ewe':              { species: 'BARBARY SHEEP', bags: ['F-IM'] },
+  'bighorn ram':              { species: 'BIGHORN SHEEP', bags: ['RAM'] },
+  'bighorn ewe':              { species: 'BIGHORN SHEEP', bags: ['EWE'] },
+  'bighorn sheep':            { species: 'BIGHORN SHEEP', bags: ['RAM', 'EWE'] },
+  'ibex':                     { species: 'IBEX', bags: ['ES', 'F-IM'] },
+  'javelina':                 { species: 'JAVELINA', bags: ['ES'] },
+  'oryx':                     { species: 'ORYX', bags: ['ES', 'BHO'] },
+};
+
 // ---- Filtering ----
 
 function filterSpecies(records, speciesList) {
@@ -54,6 +85,18 @@ function filterUnits(records, unitList) {
 
 function filterYears(records, yearList) {
   return records.filter(r => yearList.includes(r.year));
+}
+
+function filterBag(records, bags) {
+  const bagSet = new Set(bags);
+  return records.filter(r =>
+    bagSet.has(r.bag) || r.bag.split('/').some(part => bagSet.has(part))
+  );
+}
+
+function filterYouth(records, include) {
+  if (include) return records;
+  return records.filter(r => !r.unit_desc.toLowerCase().includes('youth'));
 }
 
 // ---- Odds calculation (port of HuntRecord.draw_odds) ----
@@ -235,6 +278,102 @@ function updatePinnedWidth() {
   }
 }
 
+// ---- Strategy rendering ----
+
+function populateStrategySelect() {
+  const sel = document.getElementById('strategy-select');
+  // Group hunt types by species
+  const bySpecies = {};
+  for (const [name, { species }] of Object.entries(HUNT_TYPES)) {
+    if (!bySpecies[species]) bySpecies[species] = [];
+    bySpecies[species].push(name);
+  }
+  for (const species of Object.keys(bySpecies).sort()) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = titleCase(species);
+    for (const name of bySpecies[species].sort()) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = titleCase(name);
+      optgroup.appendChild(opt);
+    }
+    sel.appendChild(optgroup);
+  }
+}
+
+function renderStrategy(records, huntTypeName, hunterType) {
+  const cfg = HUNT_TYPES[huntTypeName];
+  if (!cfg) return;
+
+  // Get latest year per hunt code
+  const latest = {};
+  for (const r of records) {
+    if (!latest[r.hunt_code] || r.year > latest[r.hunt_code].year) {
+      latest[r.hunt_code] = r;
+    }
+  }
+  const recs = Object.values(latest);
+  if (recs.length === 0) {
+    document.getElementById('strategy-results').innerHTML =
+      '<p class="strategy-empty">No matching hunts found for this strategy.</p>';
+    return;
+  }
+
+  const year = Math.max(...recs.map(r => r.year));
+  const typeAbbr = { resident: 'Resident', nonresident: 'Nonresident', outfitter: 'Outfitter', total: 'All' };
+  const bagLabel = cfg.bags.join(', ');
+
+  let html = '<div class="strategy-header">' +
+    '<h2>' + escHtml(titleCase(huntTypeName)) + '</h2>' +
+    '<p>' + titleCase(cfg.species) + ' (bag: ' + escHtml(bagLabel) + ') &middot; ' +
+    (typeAbbr[hunterType] || 'All') + ' &middot; ' + year + '</p></div>';
+
+  const choices = [[1, '1st'], [2, '2nd'], [3, '3rd']];
+  for (const [choice, label] of choices) {
+    const ranked = [];
+    for (const r of recs) {
+      const odds = drawOdds(r, hunterType, choice);
+      if (odds !== null && odds > 0) {
+        let apps;
+        if (hunterType === 'resident') apps = [r.res_1st, r.res_2nd, r.res_3rd][choice - 1];
+        else if (hunterType === 'nonresident') apps = [r.nr_1st, r.nr_2nd, r.nr_3rd][choice - 1];
+        else if (hunterType === 'outfitter') apps = [r.out_1st, r.out_2nd, r.out_3rd][choice - 1];
+        else apps = [r.total_1st, r.total_2nd, r.total_3rd][choice - 1];
+        ranked.push({ odds, apps, rec: r });
+      }
+    }
+    ranked.sort((a, b) => b.odds - a.odds);
+    const shown = ranked.slice(0, 3);
+
+    html += '<div class="strategy-tier"><h3>Best ' + label + ' Choice Options</h3>';
+
+    if (shown.length === 0) {
+      html += '<p class="strategy-empty">No hunts with draws in this tier.</p>';
+    } else {
+      html += '<table class="strategy-table"><thead><tr>' +
+        '<th>#</th><th>Hunt Code</th><th>Unit / Description</th>' +
+        '<th>Bag</th><th>Licenses</th><th>Apps</th><th>Draw %</th>' +
+        '</tr></thead><tbody>';
+      for (let i = 0; i < shown.length; i++) {
+        const s = shown[i];
+        html += '<tr>' +
+          '<td>' + (i + 1) + '</td>' +
+          '<td class="mono">' + escHtml(s.rec.hunt_code) + '</td>' +
+          '<td><span class="unit-desc" title="' + escAttr(s.rec.unit_desc) + '">' + escHtml(s.rec.unit_desc) + '</span></td>' +
+          '<td>' + escHtml(s.rec.bag) + '</td>' +
+          '<td>' + s.rec.licenses + '</td>' +
+          '<td>' + s.apps + '</td>' +
+          '<td class="odds ' + oddsClass(s.odds) + '">' + s.odds.toFixed(1) + '%</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('strategy-results').innerHTML = html;
+}
+
 // ---- CSV export ----
 
 function exportCSV(hunts, hunterType) {
@@ -356,6 +495,8 @@ function getSelectedYears() {
 
 function stateToHash() {
   const params = new URLSearchParams();
+  const strategy = document.getElementById('strategy-select').value;
+  if (strategy) params.set('strat', strategy);
   const sp = getSelectedSpecies();
   if (sp.length > 0 && sp.length < SPECIES_LIST.length) params.set('sp', sp.join(','));
   const yrs = getSelectedYears();
@@ -368,6 +509,7 @@ function stateToHash() {
   if (sort !== 'latest_odds') params.set('sort', sort);
   const top = document.getElementById('top-select').value;
   if (top !== '25') params.set('n', top);
+  if (document.getElementById('include-youth').checked) params.set('youth', '1');
   const str = params.toString();
   history.replaceState(null, '', str ? '#' + str : location.pathname);
 }
@@ -375,6 +517,8 @@ function stateToHash() {
 function hashToState() {
   if (!location.hash || location.hash.length < 2) return;
   const params = new URLSearchParams(location.hash.slice(1));
+
+  if (params.has('strat')) document.getElementById('strategy-select').value = params.get('strat');
 
   if (params.has('sp')) {
     const sp = params.get('sp').split(',');
@@ -395,6 +539,7 @@ function hashToState() {
   if (params.has('u')) document.getElementById('unit-input').value = params.get('u');
   if (params.has('sort')) document.getElementById('sort-select').value = params.get('sort');
   if (params.has('n')) document.getElementById('top-select').value = params.get('n');
+  if (params.has('youth')) document.getElementById('include-youth').checked = true;
 }
 
 // ---- Main filter pipeline ----
@@ -402,11 +547,51 @@ function hashToState() {
 function applyFilters() {
   let records = RAW_RECORDS;
 
+  // Youth filter (applied first, globally)
+  const includeYouth = document.getElementById('include-youth').checked;
+  records = filterYouth(records, includeYouth);
+
   // Year filter
   const selectedYears = getSelectedYears();
   if (selectedYears.length > 0 && selectedYears.length < YEARS_LIST.length) {
     records = filterYears(records, selectedYears);
   }
+
+  const hunterType = document.getElementById('hunter-type-select').value;
+  const strategyKey = document.getElementById('strategy-select').value;
+  const unitInput = document.getElementById('unit-input').value.trim();
+
+  // Strategy mode
+  if (strategyKey) {
+    const cfg = HUNT_TYPES[strategyKey];
+    if (cfg) {
+      records = filterSpecies(records, [cfg.species]);
+      records = filterBag(records, cfg.bags);
+      if (unitInput) {
+        records = filterUnits(records, unitInput.split(/[,\s]+/).filter(Boolean));
+      }
+
+      // Show strategy view, hide table view
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('strategy-results').style.display = '';
+      document.getElementById('sort-group').style.display = 'none';
+      document.getElementById('top-group').style.display = 'none';
+
+      renderStrategy(records, strategyKey, hunterType);
+      document.getElementById('result-count').textContent = records.length + ' matching records';
+
+      window._currentHunts = null;
+      window._currentHunterType = hunterType;
+      stateToHash();
+      return;
+    }
+  }
+
+  // Normal table mode
+  document.getElementById('results').style.display = '';
+  document.getElementById('strategy-results').style.display = 'none';
+  document.getElementById('sort-group').style.display = '';
+  document.getElementById('top-group').style.display = '';
 
   // Species filter
   const selectedSpecies = getSelectedSpecies();
@@ -415,14 +600,12 @@ function applyFilters() {
   }
 
   // Unit filter
-  const unitInput = document.getElementById('unit-input').value.trim();
   if (unitInput) {
     const unitList = unitInput.split(/[,\s]+/).filter(Boolean);
     records = filterUnits(records, unitList);
   }
 
   // Aggregate
-  const hunterType = document.getElementById('hunter-type-select').value;
   let hunts = aggregate(records, hunterType);
 
   // Sort
@@ -450,9 +633,11 @@ function applyFilters() {
 // ---- Event binding ----
 
 function bindEvents() {
-  ['hunter-type-select', 'sort-select', 'top-select'].forEach(id => {
+  ['hunter-type-select', 'sort-select', 'top-select', 'strategy-select'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
+
+  document.getElementById('include-youth').addEventListener('change', applyFilters);
 
   let unitTimer;
   document.getElementById('unit-input').addEventListener('input', () => {
@@ -473,6 +658,7 @@ async function init() {
 
   await loadData();
   populateSpeciesSelect();
+  populateStrategySelect();
   populateYearToggles();
   bindEvents();
   hashToState();
